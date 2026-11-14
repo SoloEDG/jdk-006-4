@@ -5,6 +5,8 @@ import type {
   EvidenceNote,
   SceneId,
 } from "../../../shared/types";
+import { createCaseClock } from "../../caseclock/model/mapping";
+import { validateClockState } from "../../caseclock/lib/codec";
 type Obj = Record<string, unknown>;
 function object(value: unknown, label: string): Obj {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -123,6 +125,10 @@ export function validateSnapshot(
     rate = number(rawResume.rate, "播放速度");
   if (position > duration(sceneId) || rate < 0.25 || rate > 4)
     throw new Error("播放进度无效");
+  const clock =
+    root.clock === undefined
+      ? createCaseClock(content)
+      : validateClockState(root.clock, content);
   return {
     version: 1,
     caseId: content.id,
@@ -130,5 +136,6 @@ export function validateSnapshot(
     evidence: { notes, clues, selectedId },
     heard,
     resume: { sceneId, position, rate },
+    clock,
   };
 }

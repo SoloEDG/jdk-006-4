@@ -5,6 +5,8 @@ import type {
   SceneId,
   EvidenceNote,
   Cue,
+  TimeAnchor,
+  CompareState,
 } from "../shared/types";
 import {
   CASE_CONTENT,
@@ -23,6 +25,15 @@ import {
   togglePinned,
 } from "../features/evidence";
 import {
+  createCaseClock,
+  commitAnchors,
+  addVariant,
+  setActiveVariant,
+  resetScene,
+  setCompare,
+  ensureCompare,
+} from "../features/caseclock";
+import {
   readSlots,
   createSnapshot,
   createSlot,
@@ -37,6 +48,7 @@ export function useCase() {
   const [story, setStory] = useState(createInvestigation),
     [evidence, setEvidence] = useState(createEvidence),
     [heard, setHeard] = useState<HeardHistory>({}),
+    [clock, setClock] = useState(() => createCaseClock(CASE_CONTENT)),
     [slots, setSlots] = useState<SaveSlot[]>(boot.slots),
     [activeId, setActiveId] = useState<string | null>(null),
     [notice, setNotice] = useState(
@@ -118,11 +130,18 @@ export function useCase() {
   };
   const save = (name: string) =>
     run(() => {
-      const snapshot = createSnapshot(CASE_CONTENT, story, evidence, heard, {
-        sceneId: story.sceneId,
-        position: audio.view.position,
-        rate: audio.view.rate,
-      });
+      const snapshot = createSnapshot(
+        CASE_CONTENT,
+        story,
+        evidence,
+        heard,
+        {
+          sceneId: story.sceneId,
+          position: audio.view.position,
+          rate: audio.view.rate,
+        },
+        clock,
+      );
       const old = slots.find((s) => s.id === activeId);
       const slot =
         old && name === old.name
@@ -152,6 +171,7 @@ export function useCase() {
       setStory(snap.story);
       setEvidence(snap.evidence);
       setHeard(snap.heard);
+      setClock(snap.clock);
       setActiveId(id);
       setDirty(false);
       setNotice(`已载入「${slot.name}」，点击播放继续调查。`);
@@ -166,6 +186,38 @@ export function useCase() {
       setSlots(writeSlot(slots, slot));
       setNotice("导入成功，已另存为独立调查进度。");
     });
+  const clockAct = (fn: (c: typeof clock) => typeof clock, message: string) =>
+    run(() => {
+      setClock(fn(clock));
+      setDirty(true);
+      setNotice(message);
+    });
+  const clockCommit = (
+    sceneId: SceneId,
+    variantId: string,
+    anchors: TimeAnchor[],
+  ): boolean => {
+    try {
+      setClock(commitAnchors(clock, CASE_CONTENT, sceneId, variantId, anchors));
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "映射更新失败");
+      return false;
+    }
+    setDirty(true);
+    setNotice("案件时钟的映射已更新，笔记落点已按新映射重算。");
+    return true;
+  };
+  const clockAddVariant = (sceneId: SceneId, label: string): boolean => {
+    try {
+      setClock(addVariant(clock, sceneId, label));
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "无法新增说法");
+      return false;
+    }
+    setDirty(true);
+    setNotice("已保留为并列的一套映射，可切换比较，不会自动合并。");
+    return true;
+  };
   const download = (id: string) =>
     run(() => {
       const s = slots.find((s) => s.id === id);
@@ -182,6 +234,7 @@ export function useCase() {
     story,
     evidence,
     heard,
+    clock,
     slots,
     activeId,
     notice,
@@ -197,6 +250,22 @@ export function useCase() {
     load,
     importText,
     download,
+    clockCommit,
+    clockAddVariant,
+    clockVariant: (sceneId: SceneId, variantId: string) =>
+      clockAct(
+        (c) => setActiveVariant(c, sceneId, variantId),
+        "已切换该地点采用的映射，另一套说法仍然保留。",
+      ),
+    clockCompare: (patch: Partial<CompareState>) =>
+      clockAct((c) => setCompare(c, patch), "并排比较的地点已更新。"),
+    clockResetScene: (sceneId: SceneId) =>
+      clockAct(
+        (c) => resetScene(c, CASE_CONTENT, sceneId),
+        "该地点的映射已恢复为出厂锚点。",
+      ),
+    clockFollow: (sceneId: SceneId) =>
+      setClock((c) => ensureCompare(c, sceneId)),
     edit: (id: string, text: string) => {
       setEvidence((s) => editNote(s, id, text));
       setDirty(true);
@@ -220,6 +289,7 @@ export function useCase() {
       setStory(createInvestigation());
       setEvidence(createEvidence());
       setHeard({});
+      setClock(createCaseClock(CASE_CONTENT));
       setActiveId(null);
       setDirty(false);
       if (story.sceneId === "arrival") audio.seek(0);

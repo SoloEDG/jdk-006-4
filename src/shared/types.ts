@@ -77,6 +77,32 @@ export interface ResumePoint {
   position: number;
   rate: number;
 }
+export interface TimeAnchor {
+  id: string;
+  sourceTime: number;
+  caseTime: number;
+  label: string;
+}
+export interface MappingVariant {
+  id: string;
+  label: string;
+  anchors: TimeAnchor[];
+}
+export interface SceneMapping {
+  sceneId: SceneId;
+  activeId: string;
+  variants: MappingVariant[];
+}
+export type CompareSide = "left" | "right";
+export interface CompareState {
+  left: SceneId;
+  right: SceneId;
+  primary: CompareSide;
+}
+export interface CaseClockState {
+  scenes: SceneMapping[];
+  compare: CompareState;
+}
 export interface CaseSnapshot {
   version: 1;
   caseId: string;
@@ -84,6 +110,7 @@ export interface CaseSnapshot {
   evidence: EvidenceState;
   heard: HeardHistory;
   resume: ResumePoint;
+  clock: CaseClockState;
 }
 export interface SaveSlot {
   id: string;

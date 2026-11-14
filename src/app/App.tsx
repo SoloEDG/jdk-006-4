@@ -12,6 +12,7 @@ import {
   Check,
   ChevronRight,
   Info,
+  Clock,
 } from "lucide-react";
 import {
   CASE_CONTENT,
@@ -24,12 +25,14 @@ import { Player } from "../features/listening";
 import { TranscriptPanel } from "../features/transcript";
 import { EvidencePanel, canCollectSound } from "../features/evidence";
 import { ProfilesDialog } from "../features/profiles";
+import { CaseClockDialog } from "../features/caseclock";
 import { currentCue } from "../features/transcript";
 import { useCase } from "./useCase";
 export function App() {
   const c = useCase(),
     [tab, setTab] = useState<"transcript" | "evidence">("transcript"),
     [profiles, setProfiles] = useState(false),
+    [clockOpen, setClockOpen] = useState(false),
     [about, setAbout] = useState(false);
   const scene = CASE_CONTENT.scenes.find((s) => s.id === c.story.sceneId)!,
     cue = currentCue(c.episode, c.audio.view.position),
@@ -37,6 +40,10 @@ export function App() {
   const showProfiles = () => {
     c.audio.pause();
     setProfiles(true);
+  };
+  const showClock = () => {
+    c.clockFollow(c.story.sceneId);
+    setClockOpen(true);
   };
   return (
     <div className="app">
@@ -54,6 +61,10 @@ export function App() {
             <Headphones size={14} />
             互动广播剧
           </span>
+          <button onClick={showClock}>
+            <Clock size={14} />
+            案件时钟
+          </button>
           <button onClick={() => setAbout(true)}>
             <BookOpen size={14} />
             收听指南
@@ -304,6 +315,24 @@ export function App() {
           onImport={c.importText}
           onExport={c.download}
           onClose={() => setProfiles(false)}
+        />
+      )}
+      {clockOpen && (
+        <CaseClockDialog
+          content={CASE_CONTENT}
+          clock={c.clock}
+          storySceneId={c.story.sceneId}
+          clues={c.evidence.clues}
+          notes={c.evidence.notes}
+          heard={c.heard}
+          audio={c.audio}
+          onGo={c.go}
+          onCompare={c.clockCompare}
+          onVariant={c.clockVariant}
+          onAddVariant={c.clockAddVariant}
+          onCommit={c.clockCommit}
+          onResetScene={c.clockResetScene}
+          onClose={() => setClockOpen(false)}
         />
       )}
       {about && (
